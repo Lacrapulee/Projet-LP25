@@ -1,4 +1,6 @@
 #include "backup_manager.h"
+#include "tools.h"
+
 
 void create_backup(const char *source, const char *destination) {
     // Implémenter la logique de création d'une sauvegarde
