@@ -2,10 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
-#include "file_handler.h"
-#include "deduplication.h"
 #include "backup_manager.h"
-#include "network.h"
+
 
 
 int main(int argc, char *argv[]) {
@@ -14,6 +12,8 @@ int main(int argc, char *argv[]) {
     // Implémentation de la logique de sauvegarde et restauration
     // Exemples : gestion des options --backup, --restore, etc.
     
+    create_backup("/mnt/c/Users/gauti/Documents/GitHub/Projet_LP25", "azesq");
+
     return EXIT_SUCCESS;
 }
 

@@ -6,7 +6,7 @@
 
 //Fichier TOOLS utilisé par les autres scripts; 
 // Définition de la fonction init_liste
-liste *init_liste(int valeur_int, const char *valeur_str) {
+liste *init_liste(int valeur_int, const char *valeur_str) { 
     // Allocation mémoire pour un nouvel élément de la liste
     liste *l = malloc(sizeof(liste));
     if (l == NULL) {
@@ -28,9 +28,7 @@ liste *init_liste(int valeur_int, const char *valeur_str) {
     } else {
         l->valeur_str = NULL; // Si aucune chaîne n'est donnée
     }
-
     l->suivant = NULL; // Aucun suivant pour l'instant
-
     return l;
 }
 
