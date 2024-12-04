@@ -17,37 +17,52 @@ void create_backup(const char *source, const char *destination) {
     char command_file_source[1024];
     // On liste les fichier dans la source dans la destination 
     snprintf(command_file_source, sizeof(command_file_source), "ls -p %s | grep -v /", source);
-    FILE *fp;
-    char buffer[1024];
-    char **tableau = malloc(50 * sizeof(char *)); 
-    fp = popen(command_file_source, "r");
-    int n = 0;
-    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
-        buffer[strcspn(buffer, "\n")] = '\0'; // Supprimer le '\n'
-        tableau[n] = malloc(strlen(buffer) + 1); // Allouer la mémoire pour la chaîne
-        strcpy(tableau[n], buffer);             // Copier le contenu de buffer dans tableau[n]
-            printf("%s \n", tableau[n]);
+    FILE *fp_source;
+    char buffer_fichier_source[1024];
+    char **tableau_fichier_source = malloc(50 * sizeof(char *)); 
+    fp_source = popen(command_file_source, "r");
+    int n_fichier_source = 0;
+    while (fgets(buffer_fichier_source, sizeof(buffer_fichier_source), fp_source) != NULL) {
+    
+        buffer_fichier_source[strcspn(buffer_fichier_source, "\n")] = '\0'; // Supprimer le '\n'
+        tableau_fichier_source[n_fichier_source] = malloc(strlen(buffer_fichier_source) + 1); // Allouer la mémoire pour la chaîne
+        strcpy(tableau_fichier_source[n_fichier_source], buffer_fichier_source);             // Copier le contenu de buffer dans tableau[n]
+        printf("%s \n", tableau_fichier_source[n_fichier_source]);
+        n_fichier_source++;
 
-        n++;
     }
     
-    
     // On liste les fichier dans la destination 
+    char command_file_dest[1024];
+    snprintf(command_file_dest, sizeof(command_file_dest), "ls -p %s | grep -v /", destination);
+    FILE *fp_dest;
+    char buffer_fichier_dest[1024];
+    char **tableau_fichier_dest = malloc(50 * sizeof(char *)); 
+    fp_dest = popen(command_file_dest, "r");
+    int n_fichier_dest = 0;
+    while (fgets(buffer_fichier_dest, sizeof(buffer_fichier_dest), fp_dest) != NULL) {
     
+        buffer_fichier_dest[strcspn(buffer_fichier_dest, "\n")] = '\0'; // Supprimer le '\n'
+        tableau_fichier_dest[n_fichier_dest] = malloc(strlen(buffer_fichier_dest) + 1); // Allouer la mémoire pour la chaîne
+        strcpy(tableau_fichier_dest[n_fichier_dest], buffer_fichier_dest);             // Copier le contenu de buffer dans tableau[n]
+            printf("%s \n", tableau_fichier_dest[n_fichier_dest]);
 
-
-
-
-
-
+        n_fichier_dest++;
+    }
+    
     //on compare les chunks, et on remplace...
-    for (int i = 0; i < n; i++){
+    for (int i = 0; i < n_fichier_source; i++){
         // copy_file(source/tableau[i], destination/tableau[i]);
     } 
 
     // On regarde aussi les fichier en trop dans la destination (qui etait là de base et qui on été effacer dans la source)
-    //pclise(fp); pour la destination
-    pclose(fp);
+    
+
+
+    pclose(fp_dest); 
+    pclose(fp_source);
+
+
     // On liste les dossiers de la sources, 
 
         // Si le dossiers n'existe pas dans la destination : 
@@ -62,9 +77,11 @@ void create_backup(const char *source, const char *destination) {
     
     // Libérer la mémoire
     for (int i = 0; i < 50; i++) {
-        free(tableau[i]);
+        free(tableau_fichier_dest[i]);
+        free(tableau_fichier_source[i]);
     }
-    free(tableau);
+    free(tableau_fichier_dest);
+    free(tableau_fichier_source);
     return;
 }
 
