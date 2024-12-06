@@ -11,7 +11,6 @@ typedef struct {
 } FileChunk;
 
 
-// On fait un chunk par ligne
 
 void deduplicate_files(const char *source, const char *destination) {
     // Implémenter la logique de déduplication des fichiers

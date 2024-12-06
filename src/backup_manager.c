@@ -50,7 +50,6 @@ void create_backup(const char *source, const char *destination) {
         n_fichier_dest++;
     }
     
-    //on compare les chunks, et on remplace...
     for (int i = 0; i < n_fichier_source; i++){
         // copy_file(source/tableau[i], destination/tableau[i]);
     } 
@@ -64,7 +63,24 @@ void create_backup(const char *source, const char *destination) {
 
 
     // On liste les dossiers de la sources, 
+    // Implémenter la logique de création d'une sauvegarde :
+    char command_file_source[1024];
+    // On liste les fichier dans la source dans la destination 
+    snprintf(command_file_source, sizeof(command_file_source), "ls -p %s | grep -v /", source);
+    FILE *fp_source;
+    char buffer_fichier_source[1024];
+    char **tableau_fichier_source = malloc(50 * sizeof(char *)); 
+    fp_source = popen(command_file_source, "r");
+    int n_fichier_source = 0;
+    while (fgets(buffer_fichier_source, sizeof(buffer_fichier_source), fp_source) != NULL) {
+    
+        buffer_fichier_source[strcspn(buffer_fichier_source, "\n")] = '\0'; // Supprimer le '\n'
+        tableau_fichier_source[n_fichier_source] = malloc(strlen(buffer_fichier_source) + 1); // Allouer la mémoire pour la chaîne
+        strcpy(tableau_fichier_source[n_fichier_source], buffer_fichier_source);             // Copier le contenu de buffer dans tableau[n]
+        printf("%s \n", tableau_fichier_source[n_fichier_source]);
+        n_fichier_source++;
 
+    }
         // Si le dossiers n'existe pas dans la destination : 
             // On créé le dossier 
         
