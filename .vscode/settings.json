@@ -4,6 +4,7 @@
         "cstdlib": "c",
         "tools.h": "c",
         "file_handler.h": "c",
-        "deduplication.h": "c"
+        "deduplication.h": "c",
+        "dirent.h": "c"
     }
 }
