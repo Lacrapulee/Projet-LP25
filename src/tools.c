@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "tools.h"
-#include <dirent.h>
+
 /*
 //Fichier TOOLS utilisé par les autres scripts; 
 // Définition de la fonction init_liste
@@ -79,55 +79,3 @@ void affiche_liste(liste *l){
     return;
 } */
 
-int len(char ** tableau){
-    int i = 0; 
-
-    while (tableau[i] != "\0"){
-        i++;
-    }
-    return i;
-}
-
-
-char **list_files(const char *path) {
-    // Open the directory
-    DIR *dir = opendir(path);
-    if (dir == NULL) {
-        perror("opendir");
-        return NULL;
-    }
-
-    // Allocate space for 50 file names (adjust size as needed)
-    char **tableau = malloc(50 * sizeof(char *));
-    if (tableau == NULL) {
-        perror("malloc");
-        closedir(dir);
-        return NULL;
-    }
-
-    struct dirent *entry;
-    int i = 0;
-
-    // Read and store the file names in tableau
-    while ((entry = readdir(dir)) != NULL) {
-        tableau[i] = malloc(strlen(entry->d_name) + 1); // Allocate space for the file name
-        if (tableau[i] == NULL) {
-            perror("malloc");
-            // Free the previously allocated memory
-            for (int j = 0; j < i; j++) {
-                free(tableau[j]);
-            }
-            free(tableau);
-            closedir(dir);
-            return NULL;
-        }
-        strcpy(tableau[i], entry->d_name); // Copy the file name to the allocated memory
-        i++;
-    }
-
-    // Close the directory
-    closedir(dir);
-
-    // Return the list of file names
-    return tableau;
-}

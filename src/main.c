@@ -2,22 +2,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
-#include "tools.h"
-
-
+#include "deduplication.h"
 
 int main(int argc, char *argv[]) {
     // Analyse des arguments de la ligne de commande
 
     // Implémentation de la logique de sauvegarde et restauration
     // Exemples : gestion des options --backup, --restore, etc.
-    char **tableau = malloc(50 * sizeof(char *));
+    deduplicate_files("test/test1.txt", "test/test2.txt"); 
 
-    tableau = list_files("/home/gauthier/Documents/GitHub/Projet-LP25/src");
-
-    for (int i = 0; i < 16; i++){
-        printf("%s \n", tableau[i]); 
-    }
+    
     return EXIT_SUCCESS;
 }
 

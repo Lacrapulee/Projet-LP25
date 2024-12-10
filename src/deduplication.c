@@ -1,10 +1,10 @@
-#include "deduplication.h"
-#include "tools.h"
-#include <stdio.h>
 #include <openssl/md5.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include "deduplication.h"
+#include <stdio.h>
+
 
 #define HASH_SIZE MD5_DIGEST_LENGTH  // MD5 digest length
 #define CHUNK_SIZE 4096             // Chunk size: 4KB

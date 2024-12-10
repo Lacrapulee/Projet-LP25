@@ -15,5 +15,4 @@ liste *ajou_fin_liste(liste *l, int valeur_int, char *valeur_str); // Ajoute un 
 liste *ajoute_debut(liste *l, int valeur_int, const char *valeur_str); // Ajoute un élément au début de la liste
 void affiche_liste(liste *l); //Trivial nan ? 
 */
-char **list_files(const char *path); 
 #endif // TOOLS

@@ -5,6 +5,11 @@
         "tools.h": "c",
         "file_handler.h": "c",
         "deduplication.h": "c",
-        "dirent.h": "c"
+        "dirent.h": "c",
+        "getopt.h": "c",
+        "stdio.h": "c",
+        "string.h": "c",
+        "stdlib.h": "c",
+        "stat.h": "c"
     }
 }

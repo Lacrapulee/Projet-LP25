@@ -1,97 +1,121 @@
-#include "backup_manager.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "tools.h"
+#include <sys/stat.h>  // Pour mkdir et stat
+#include "backup_manager.h"
+#include "file_handler.h"
+#include "deduplication.h"
 
-// Initialisation du nouveau fichier de sauvegarde en local 
-void init_backup(){
-    
+// Initialisation du nouveau fichier de sauvegarde en local et du data 
+void init_backup(const char * source){
+    struct stat st;
+
+    if (stat(source, &st) != 0) { 
+        // L'élément n'existe pas dans la destination, création nécessaire
+        if (cp(source) != 0) {
+            perror("Erreur lors de la création du répertoire");
+            return; 
+        }
+    }
 }
 
-void copy_files(const char *source, const char *destination) {
-    
-     
-    // on ouvre les deux fichiers, on les fragementent en chunk 
 
-}
-
-void remove_files(const char *source){
-
+void remove_directory(const char *source){
+    char *p;
+    struct stat st;
+    if (stat(source, &st) == 0 && S_ISREG(st.st_mode))
+    {
+        if (asprintf(&p, "rm -r %s", source) != -1)
+        {
+            system(p);
+            free(p);
+        }
+    }
 
     return; 
 }
 
-
 void create_backup(const char *source, const char *destination) {
-    
 
-    char **tableau_fichier_source = malloc(50 * sizeof(char *)); 
-    char **tableau_fichier_dest = malloc(50 * sizeof(char *)); 
+    // List files
+    char **files_src = list_files(source);
+    char **files_dest = list_files(destination);
 
-    tableau_fichier_dest = list_files(source);
-    tableau_fichier_dest = list_files(destination); 
+    // Sync files
+    for (int i = 0; i < len(files_src); i++) {
+        char src_path[PATH_MAX], dest_path[PATH_MAX];
+        snprintf(src_path, PATH_MAX, "%s/%s", source, files_src[i]);
+        snprintf(dest_path, PATH_MAX, "%s/%s", destination, files_src[i]);
 
-    for (int i = 0; i < len(tableau_fichier_source); i++){
-        // copy_file(source/tableau[i], destination/tableau[i]);
-    } 
+        deduplicate_files(src_path, dest_path);
+    }
 
-    // On regarde aussi les fichier en trop dans la destination (qui etait là de base et qui on été effacer dans la source)
-    for (int i = 0; i < len(tableau_fichier_dest); i++){
-        
-        int rm = 1;
-        
-        for (int j = 0; j < len(tableau_fichier_source); j++){
-             
-            if (tableau_fichier_dest[i] == tableau_fichier_source[j]){
-                rm = 0; 
+    // Remove extra files in destination
+    for (int i = 0; i < len(files_dest); i++) {
+        int found = 0;
+        for (int j = 0; j < len(files_src); j++) {
+            if (strcmp(files_dest[i], files_src[j]) == 0) {
+                found = 1;
+                break;
             }
         }
-        if (rm){
-            //remove_files(tableau_fichier_dest[i]);
-        }  
+        if (!found) {
+            char dest_path[PATH_MAX];
+            snprintf(dest_path, PATH_MAX, "%s/%s", destination, files_dest[i]);
+            remove_directory(dest_path);
+        }
     }
 
+    // List folders
+    char **folders_src = list_folders(source);
+    char **folders_dest = list_folders(destination);
 
-    // On liste les dossiers de la sources, 
-    // Implémenter la logique de création d'une sauvegarde :
-    char command_file_source[1024];
-    // On liste les fichier dans la source dans la destination 
-    snprintf(command_file_source, sizeof(command_file_source), "ls -p %s | grep -v /", source);
-    FILE *fp_source;
-    char buffer_fichier_source[1024];
-    char **tableau_fichier_source = malloc(50 * sizeof(char *)); 
-    fp_source = popen(command_file_source, "r");
-    int n_fichier_source = 0;
-    while (fgets(buffer_fichier_source, sizeof(buffer_fichier_source), fp_source) != NULL) {
-    
-        buffer_fichier_source[strcspn(buffer_fichier_source, "\n")] = '\0'; // Supprimer le '\n'
-        tableau_fichier_source[n_fichier_source] = malloc(strlen(buffer_fichier_source) + 1); // Allouer la mémoire pour la chaîne
-        strcpy(tableau_fichier_source[n_fichier_source], buffer_fichier_source);             // Copier le contenu de buffer dans tableau[n]
-        printf("%s \n", tableau_fichier_source[n_fichier_source]);
-        n_fichier_source++;
-
-    }
-        // Si le dossiers n'existe pas dans la destination : 
-            // On créé le dossier 
+    // Sync folders
+    for (int i = 0; i < len(folders_src); i++) {
+        char new_src[PATH_MAX], new_dest[PATH_MAX];
+        snprintf(new_src, PATH_MAX, "%s/%s", source, folders_src[i]);
+        snprintf(new_dest, PATH_MAX, "%s/%s", destination, folders_src[i]);
+        // Vérification si l'élément existe déjà dans la destination
+        struct stat st;
+        if (stat(new_dest, &st) != 0) { 
+            // L'élément n'existe pas dans la destination, création nécessaire
+            if (mkdir(new_dest) != 0) {
+                perror("Erreur lors de la création du répertoire");
+                continue; // Passer à l'élément suivant si la création échoue
+            }
+        }
+        // Recursive call for subdirectories
+        create_backup(new_src, new_dest);
         
-        // On execute create_backup(source/dossier, destination/dossier)
-
-    // On liste les dossier de la destination 
-        // Si le dossier n'existe pas dans la source, 
-            // On le supprime
-    
-    
-    // Libérer la mémoire
-    for (int i = 0; i < 50; i++) {
-        free(tableau_fichier_dest[i]);
-        free(tableau_fichier_source[i]);
     }
-    free(tableau_fichier_dest);
-    free(tableau_fichier_source);
-    return;
-}
 
+    // Remove extra folders in destination
+    for (int i = 0; i < len(folders_dest); i++) {
+        int found = 0;
+        for (int j = 0; j < len(folders_src); j++) {
+            if (strcmp(folders_dest[i], folders_src[j]) == 0) {
+                found = 1;
+                break;
+            }
+        }
+        if (!found) {
+            char dest_path[PATH_MAX];
+            snprintf(dest_path, PATH_MAX, "%s/%s", destination, folders_dest[i]);
+            remove_directory(dest_path);
+        }
+    }
+
+    // Free allocated memory
+    for (int i = 0; i < len(files_src); i++) free(files_src[i]);
+    for (int i = 0; i < len(files_dest); i++) free(files_dest[i]);
+    for (int i = 0; i < len(folders_src); i++) free(folders_src[i]);
+    for (int i = 0; i < len(folders_dest); i++) free(folders_dest[i]);
+
+    free(files_src);
+    free(files_dest);
+    free(folders_src);
+    free(folders_dest);
+}
 void restore_backup(const char *backup_id, const char *destination) {
     // Implémenter la logique de restauration d'une sauvegarde
 
