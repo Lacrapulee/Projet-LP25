@@ -8,15 +8,17 @@
 
 // Initialisation du nouveau fichier de sauvegarde en local et du data 
 void init_backup(const char * source){
-    struct stat st;
+    // Si le dossier backup-source n'existe pas on le créé ainsi que le dossier data, 
 
-    if (stat(source, &st) != 0) { 
-        // L'élément n'existe pas dans la destination, création nécessaire
-        if (cp(source) != 0) {
-            perror("Erreur lors de la création du répertoire");
-            return; 
-        }
-    }
+    // Sinon 
+        // On copie les données du dernier backup, on le renomme avec la date (aaaa/mm/jj/hh/min/ss.ms)
+            // pour trouver le dernier back up on récupère les noms et on les tris.
+            // pour copier, on fait une commande cp à l'aide de la bib sys 
+
+
+    // On peut appeler la fonction create backup avec le comme source la source et comme destination le dossier créé.   
+
+    return; // ne pas effacer 
 }
 
 
@@ -31,7 +33,6 @@ void remove_directory(const char *source){
             free(p);
         }
     }
-
     return; 
 }
 
@@ -118,8 +119,8 @@ void create_backup(const char *source, const char *destination) {
 }
 void restore_backup(const char *backup_id, const char *destination) {
     // Implémenter la logique de restauration d'une sauvegarde
-
-    // Recuperer le dernier fichier en date et le changer. (à voir si on doit utiliser les chunks)
+    // create_backup() peut-etre ? 
+    // Recuperer le dernier fichier en date et le changer. 
 }
 
 void list_backup(const char *directory) {
