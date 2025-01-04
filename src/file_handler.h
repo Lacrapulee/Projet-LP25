@@ -9,7 +9,7 @@ void write_file(const char *filepath, const void *data, size_t size);
 */
 char **list_files(const char *path); 
 char** list_folder(const char *path);
-int len(char ** tableau);
+const char *get_last_directory(const char *path);
 
 #endif // FILE_HANDLER_H
 

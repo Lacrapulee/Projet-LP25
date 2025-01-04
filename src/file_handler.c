@@ -21,15 +21,7 @@ void write_file(const char *filepath, const void *data, size_t size) {
 
 
 
-int len(char ** tableau){
-    int i = 0; 
-
-    while (tableau[i] != "\0"){
-        i++;
-    }
-    return i;
-}
-
+// The list_files function, which returns an array of file names in a directory
 char **list_files(const char *path) {
     // Open the directory
     DIR *dir = opendir(path);
@@ -38,8 +30,9 @@ char **list_files(const char *path) {
         return NULL;
     }
 
-    // Allocate space for 50 file names (adjust size as needed)
-    char **tableau = malloc(50 * sizeof(char *));
+    // Allocate space for file names (initial size)
+    size_t capacity = 50;
+    char **tableau = malloc(capacity * sizeof(char *));
     if (tableau == NULL) {
         perror("malloc");
         closedir(dir);
@@ -51,10 +44,25 @@ char **list_files(const char *path) {
 
     // Read and store the file names in tableau
     while ((entry = readdir(dir)) != NULL) {
+        // Ignore directories like "." and ".."
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            continue;
+
+        // Resize tableau if needed
+        if (i >= capacity) {
+            capacity *= 2;  // Double the size
+            tableau = realloc(tableau, capacity * sizeof(char *));
+            if (tableau == NULL) {
+                perror("realloc");
+                closedir(dir);
+                return NULL;
+            }
+        }
+
         tableau[i] = malloc(strlen(entry->d_name) + 1); // Allocate space for the file name
         if (tableau[i] == NULL) {
             perror("malloc");
-            // Free the previously allocated memory
+            // Free previously allocated memory
             for (int j = 0; j < i; j++) {
                 free(tableau[j]);
             }
@@ -69,28 +77,65 @@ char **list_files(const char *path) {
     // Close the directory
     closedir(dir);
 
-    // Return the list of file names
+    // Mark the end of the array
+    tableau[i] = NULL;
+
     return tableau;
 }
-
-char** list_folder(const char *path) {
-    
+char **list_folder(const char *path) {
     char command[1024];
-    // On liste les fichier dans la source dans la destination 
     snprintf(command, sizeof(command), "ls --directory %s/*/ | xargs -n 1 basename", path);
+
     FILE *fp;
     char buffer[1024];
-    char **tableau = malloc(50 * sizeof(char *)); 
+    size_t capacity = 50;
+    char **tableau = malloc(capacity * sizeof(char *));
+    if (tableau == NULL) {
+        perror("malloc");
+        return NULL;
+    }
+
     fp = popen(command, "r");
+    if (fp == NULL) {
+        perror("popen");
+        free(tableau);
+        return NULL;
+    }
+
     int n = 0;
     while (fgets(buffer, sizeof(buffer), fp) != NULL) {
-    
-        buffer[strcspn(buffer, "\n")] = '\0'; // Supprimer le '\n'
-        tableau[n] = malloc(strlen(buffer) + 1); // Allouer la mémoire pour la chaîne
-        strcpy(tableau[n], buffer);             // Copier le contenu de buffer dans tableau[n]
-        printf("%s \n", tableau[n]);
-        n++;
+        // Remove the newline character
+        buffer[strcspn(buffer, "\n")] = '\0';
 
+        // Resize tableau if needed
+        if (n >= capacity) {
+            capacity *= 2;  // Double the size
+            tableau = realloc(tableau, capacity * sizeof(char *));
+            if (tableau == NULL) {
+                perror("realloc");
+                fclose(fp);
+                return NULL;
+            }
+        }
+
+        tableau[n] = malloc(strlen(buffer) + 1);  // Allocate memory for the directory name
+        if (tableau[n] == NULL) {
+            perror("malloc");
+            // Free the previously allocated memory
+            for (int i = 0; i < n; i++) {
+                free(tableau[i]);
+            }
+            free(tableau);
+            fclose(fp);
+            return NULL;
+        }
+        strcpy(tableau[n], buffer);  // Copy the directory name
+        n++;
     }
-    return tableau; 
+
+    // Mark the end of the array
+    tableau[n] = NULL;
+
+    fclose(fp);
+    return tableau;
 }

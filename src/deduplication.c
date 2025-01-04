@@ -31,8 +31,8 @@ int compare_hashes(const void *a, const void *b) {
     return memcmp(a, b, HASH_SIZE);
 }
 
-// Function to read the file in chunks and deduplicate
-void deduplicate_files(const char *source, const char *destination) {
+// Fonction pour lire les deux fichier et les copier 
+void deduplicate_files(const char *source, const char *destination, const char *hashes) {
     FILE *srcFile, *destFile;
     unsigned char buffer[CHUNK_SIZE];
     unsigned char hash[HASH_SIZE];
@@ -40,15 +40,29 @@ void deduplicate_files(const char *source, const char *destination) {
     FILE *hashFile;
     int isDuplicate;
     size_t i, j;
+    char dirpath[1024];   // Pour stocker le chemin du répertoire destination
 
-    // Open source file for reading
+    // Copier destination pour éviter de modifier l'original
+    strncpy(dirpath, destination, sizeof(dirpath));
+    dirpath[sizeof(dirpath) - 1] = '\0'; // Sécuriser la chaîne
+
+    // Trouver le dernier '/' pour isoler le répertoire
+    char *last_slash = strrchr(dirpath, '/');
+    if (last_slash != NULL) {
+        *last_slash = '\0'; // Couper la chaîne pour ne garder que le répertoire
+    } else {
+        fprintf(stderr, "Chemin invalide : pas de répertoire trouvé.\n");
+        return; // Erreur si le chemin n'a pas de '/'
+    }
+
+    // on ouvre le fichier source en lecture binaire 
     srcFile = fopen(source, "rb");
     if (srcFile == NULL) {
         perror("Error opening source file");
         return;
     }
 
-    // Open destination file for writing
+    // Ouvre le fichier destinaton en écriture 
     destFile = fopen(destination, "wb");
     if (destFile == NULL) {
         perror("Error opening destination file");
@@ -56,8 +70,8 @@ void deduplicate_files(const char *source, const char *destination) {
         return;
     }
 
-    // Create a file to store seen hashes
-    hashFile = fopen("hashes.dat", "a+b");
+    // Créé un fichier pour l'historique des chunks 
+    hashFile = fopen(hashes, "a+b");
     if (hashFile == NULL) {
         perror("Error opening hash storage file");
         fclose(srcFile);
@@ -65,12 +79,12 @@ void deduplicate_files(const char *source, const char *destination) {
         return;
     }
 
-    // Read the source file in chunks
+    // Découpe de fichier en chunk 
     while ((bytesRead = fread(buffer, 1, CHUNK_SIZE, srcFile)) > 0) {
-        // Compute the MD5 hash of the chunk
+        // faire le code md5 du chunk
         MD5(buffer, bytesRead, hash);
 
-        // Check if the hash is already in the hash storage
+        // regarde si le chunk n'est pas dans le fichier historique 
         fseek(hashFile, 0, SEEK_SET);
         isDuplicate = 0;
         while (fread(buffer, 1, HASH_SIZE, hashFile) == HASH_SIZE) {
@@ -80,19 +94,19 @@ void deduplicate_files(const char *source, const char *destination) {
             }
         }
 
-        // If the hash is a duplicate, skip writing this chunk to the destination
+        // si il est double, on passe 
         if (isDuplicate) {
-            printf("Duplicate chunk found, skipping.\n");
+            printf("Double, on passe.\n");
         } else {
-            // Write the chunk to the destination file
+            // Sinon on ecrit le chunk dans la destination
             fwrite(buffer, 1, bytesRead, destFile);
 
-            // Save the new hash to the hash storage
+            // on sauvegarde dans l'historique 
             fwrite(hash, 1, HASH_SIZE, hashFile);
         }
     }
 
-    // Close all files
+    
     fclose(srcFile);
     fclose(destFile);
     fclose(hashFile);
