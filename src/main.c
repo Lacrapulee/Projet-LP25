@@ -1,19 +1,25 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <getopt.h>
-#include "file_handler.h"
-#include "deduplication.h"
-#include "backup_manager.h"
 #include "network.h"
 
+int main() {
+    const char *data = "Bonjour";
+    const char *server_address = "127.0.0.1";
+    int port = 8080;
 
-int main(int argc, char *argv[]) {
-    // Analyse des arguments de la ligne de commande
+    // Démarrer un thread ou un processus pour le serveur ici si nécessaire
 
-    // Implémentation de la logique de sauvegarde et restauration
-    // Exemples : gestion des options --backup, --restore, etc.
-    
-    return EXIT_SUCCESS;
+    // Test de l'envoi de données
+    printf("Envoi des données au serveur...\n");
+    send_data(server_address, port, data, strlen(data));
+
+    // Test de réception (le serveur doit être prêt à recevoir)
+    printf("Réception des données depuis un client...\n");
+    char *received_data = receive_data(port, NULL);
+    if (received_data) {
+        printf("Données reçues : %s\n", received_data);
+        free(received_data);
+    }
+
+    return 0;
 }
-
