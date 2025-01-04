@@ -4,8 +4,11 @@
 
 void create_backup(const char *source, const char *destination) {
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     // Implémenter la logique de création d'une sauvegarde
 =======
+=======
+>>>>>>> Stashed changes
     
     // Implémenter la logique de création d'une sauvegarde :
     char command_file_source[1024];
@@ -93,6 +96,9 @@ void create_backup(const char *source, const char *destination) {
     free(tableau_fichier_dest);
     free(tableau_fichier_source);
     return;
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 }
 
