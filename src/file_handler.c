@@ -1,40 +1,82 @@
-#include <stdio.h>
-#include <dirent.h>
-#include <string.h>
-#include <stdlib.h>
 #include "file_handler.h"
-/*
-void list_files(const char *path) {
-    // Implémenter la logique pour lister les fichiers dans le répertoire donné
-    // faire un ls sur le dossier, faire list_files(*path + le dossier) quand c'est un dossier ou alors si c'est un fichier le mettre dans la liste que l'on retourne. 
-    // S'inspirer de la fonction create_backup() 
-}
 
-void read_file(const char *filepath) {
-    // Implémenter la logique pour lire un fichier
-}
-
-void write_file(const char *filepath, const void *data, size_t size) {
-    // Implémenter la logique pour écrire des données dans un fichier
-}
-*/
-
-
-
-// The list_files function, which returns an array of file names in a directory
-char **list_files(const char *path) {
-    // Open the directory
-    DIR *dir = opendir(path);
-    if (dir == NULL) {
-        perror("opendir");
+// Fonction pour lire le contenu d'un fichier et retourner un tampon contenant les données
+// `filepath` : chemin du fichier à lire
+// `size` : pointeur vers une variable pour stocker la taille du fichier
+void read_file(const char *filepath, size_t *size) {
+    // Ouvrir le fichier en mode binaire
+    FILE *file = fopen(filepath, "rb");
+    if (file == NULL) {
+        perror("Erreur lors de l'ouverture du fichier");
+        *size = 0;
         return NULL;
     }
 
-    // Allocate space for file names (initial size)
+    // Aller à la fin du fichier pour calculer sa taille
+    fseek(file, 0, SEEK_END);
+    *size = ftell(file); // Récupérer la position actuelle (taille totale du fichier)
+    rewind(file);        // Revenir au début du fichier
+
+    // Allouer un tampon pour contenir les données du fichier
+    void *buffer = malloc(*size);
+    if (buffer == NULL) {
+        perror("Erreur lors de l'allocation mémoire");
+        fclose(file);
+        *size = 0;
+        return NULL;
+    }
+
+    // Lire le contenu du fichier dans le tampon
+    size_t bytesRead = fread(buffer, 1, *size, file);
+    if (bytesRead != *size) {
+        perror("Erreur lors de la lecture complète du fichier");
+        free(buffer);
+        fclose(file);
+        *size = 0;
+        return NULL;
+    }
+
+    // Fermer le fichier et retourner le tampon
+    fclose(file);
+    return buffer;
+}
+
+// Fonction pour récupérer le dernier composant (nom de fichier ou dossier) d'un chemin
+// `path` : chemin complet
+const char *get_last_directory(const char *path) {
+    // Vérifier si le chemin est valide
+    if (path == NULL || strlen(path) == 0) {
+        return NULL; // Retourner NULL si le chemin est vide ou invalide
+    }
+
+    // Rechercher le dernier caractère '/' dans le chemin
+    const char *last_slash = strrchr(path, '/');
+    
+    // Si aucun '/' n'est trouvé, le chemin correspond au fichier ou au dossier sans préfixe
+    if (last_slash == NULL) {
+        return path; // Retourner l'entrée complète
+    }
+
+    // Retourner la partie après le dernier '/'
+    return last_slash + 1;
+}
+
+// Fonction pour lister les fichiers et répertoires d'un dossier
+// `path` : chemin du répertoire à lire
+// Retourne un tableau de chaînes (noms de fichiers), NULL en cas d'erreur
+char **list_files(const char *path) {
+    // Ouvrir le répertoire
+    DIR *dir = opendir(path);
+    if (dir == NULL) {
+        perror("Erreur lors de l'ouverture du répertoire");
+        return NULL;
+    }
+
+    // Allouer de l'espace pour stocker les noms de fichiers (capacité initiale)
     size_t capacity = 50;
     char **tableau = malloc(capacity * sizeof(char *));
     if (tableau == NULL) {
-        perror("malloc");
+        perror("Erreur lors de l'allocation de mémoire pour le tableau");
         closedir(dir);
         return NULL;
     }
@@ -42,27 +84,28 @@ char **list_files(const char *path) {
     struct dirent *entry;
     int i = 0;
 
-    // Read and store the file names in tableau
+    // Lire les entrées du répertoire
     while ((entry = readdir(dir)) != NULL) {
-        // Ignore directories like "." and ".."
+        // Ignorer les répertoires spéciaux "." et ".."
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
             continue;
 
-        // Resize tableau if needed
+        // Redimensionner le tableau si nécessaire
         if (i >= capacity) {
-            capacity *= 2;  // Double the size
+            capacity *= 2; // Doubler la taille du tableau
             tableau = realloc(tableau, capacity * sizeof(char *));
             if (tableau == NULL) {
-                perror("realloc");
+                perror("Erreur lors du redimensionnement du tableau");
                 closedir(dir);
                 return NULL;
             }
         }
 
-        tableau[i] = malloc(strlen(entry->d_name) + 1); // Allocate space for the file name
+        // Allouer de la mémoire pour le nom de fichier
+        tableau[i] = malloc(strlen(entry->d_name) + 1);
         if (tableau[i] == NULL) {
-            perror("malloc");
-            // Free previously allocated memory
+            perror("Erreur lors de l'allocation mémoire pour un nom de fichier");
+            // Libérer les ressources déjà allouées
             for (int j = 0; j < i; j++) {
                 free(tableau[j]);
             }
@@ -70,72 +113,17 @@ char **list_files(const char *path) {
             closedir(dir);
             return NULL;
         }
-        strcpy(tableau[i], entry->d_name); // Copy the file name to the allocated memory
+
+        // Copier le nom du fichier dans le tableau
+        strcpy(tableau[i], entry->d_name);
         i++;
     }
 
-    // Close the directory
+    // Fermer le répertoire
     closedir(dir);
 
-    // Mark the end of the array
+    // Marquer la fin du tableau par un pointeur NULL
     tableau[i] = NULL;
 
-    return tableau;
-}
-char **list_folder(const char *path) {
-    char command[1024];
-    snprintf(command, sizeof(command), "ls --directory %s/*/ | xargs -n 1 basename", path);
-
-    FILE *fp;
-    char buffer[1024];
-    size_t capacity = 50;
-    char **tableau = malloc(capacity * sizeof(char *));
-    if (tableau == NULL) {
-        perror("malloc");
-        return NULL;
-    }
-
-    fp = popen(command, "r");
-    if (fp == NULL) {
-        perror("popen");
-        free(tableau);
-        return NULL;
-    }
-
-    int n = 0;
-    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
-        // Remove the newline character
-        buffer[strcspn(buffer, "\n")] = '\0';
-
-        // Resize tableau if needed
-        if (n >= capacity) {
-            capacity *= 2;  // Double the size
-            tableau = realloc(tableau, capacity * sizeof(char *));
-            if (tableau == NULL) {
-                perror("realloc");
-                fclose(fp);
-                return NULL;
-            }
-        }
-
-        tableau[n] = malloc(strlen(buffer) + 1);  // Allocate memory for the directory name
-        if (tableau[n] == NULL) {
-            perror("malloc");
-            // Free the previously allocated memory
-            for (int i = 0; i < n; i++) {
-                free(tableau[i]);
-            }
-            free(tableau);
-            fclose(fp);
-            return NULL;
-        }
-        strcpy(tableau[n], buffer);  // Copy the directory name
-        n++;
-    }
-
-    // Mark the end of the array
-    tableau[n] = NULL;
-
-    fclose(fp);
     return tableau;
 }

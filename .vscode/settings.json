@@ -10,6 +10,9 @@
         "stdio.h": "c",
         "string.h": "c",
         "stdlib.h": "c",
-        "stat.h": "c"
+        "stat.h": "c",
+        "stdint.h": "c",
+        "ftw.h": "c",
+        "time.h": "c"
     }
 }

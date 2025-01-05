@@ -1,132 +1,55 @@
-#define _GNU_SOURCE  // Pour activer asprintf
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <dirent.h>
-#include <time.h>
-#include <ftw.h>  // Pour suppression récursive des répertoires
-#include "file_handler.h"
-#include "deduplication.h"
-
-#define MAX_PATH 1024
+#include "backup_manager.h"
 
 // Déclarations des fonctions
-void create_backup(const char *source, const char *destination, const char *hashes);
-void create_directory(const char *path);
-void get_current_time(char *buffer, size_t size);
-char *find_most_recent_folder(const char *directory);
-int array_length(char **array);
-int copy_with_cp(const char *source, const char *destination);
-int remove_callback(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf);
-void remove_directory(const char *path);
-void init_backup(const char *dir_backup, const char *source);
-int is_directory(const char *path);
-int copy_item(const char *source, const char *destination);
-
-// Fonction pour créer un dossier si inexistant
-void create_directory(const char *path) {
-    struct stat st = {0};
-    if (stat(path, &st) == -1) {
-        if (mkdir(path, 0755) == -1) {
-            perror("Erreur lors de la création du répertoire");
-        }
-    }
-}
-
-// Fonction pour récupérer l'heure actuelle formatée
-void get_current_time(char *buffer, size_t size) {
-    time_t now = time(NULL);
-    struct tm *t = localtime(&now);
-    strftime(buffer, size, "%Y.%m.%d.%H.%M.%S", t);
-}
-
-// Fonction pour trouver le dossier le plus récent dans un répertoire
-char *find_most_recent_folder(const char *directory) {
-    DIR *dir;
-    struct dirent *entry;
-    struct stat statbuf;
-    time_t latest_time = 0;
-    static char latest_folder[MAX_PATH] = "";
-
-    if ((dir = opendir(directory)) == NULL) {
-        perror("Erreur lors de l'ouverture du répertoire");
-        return NULL;
-    }
-
-    while ((entry = readdir(dir)) != NULL) {
-        char path[MAX_PATH];
-        snprintf(path, sizeof(path), "%s/%s", directory, entry->d_name);
-
-        if (stat(path, &statbuf) == 0 && S_ISDIR(statbuf.st_mode)) {
-            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-                continue;
-            }
-
-            if (statbuf.st_mtime > latest_time) {
-                latest_time = statbuf.st_mtime;
-                strncpy(latest_folder, path, sizeof(latest_folder) - 1);
-            }
-        }
-    }
-
-    closedir(dir);
-    return latest_folder[0] != '\0' ? latest_folder : NULL;
-}
-
-// Fonction pour compter les éléments dans un tableau dynamique
-int array_length(char **array) {
-    int count = 0;
-    while (array[count] != NULL) {
-        count++;
-    }
-    return count;
-}
-
-// Fonction pour copier des fichiers/répertoires avec la commande 'cp'
-int copy_with_cp(const char *source, const char *destination) {
-    char command[4096];
-    snprintf(command, sizeof(command), "cp -r '%s'/* '%s'", source, destination);
-
-    int result = system(command);
-
-    if (result != 0) {
-        fprintf(stderr, "Erreur : impossible de copier '%s' vers '%s' avec cp.\n", source, destination);
-        return -1;
-    }
-
-    return 0;
-}
-
-// Fonction pour supprimer un fichier ou répertoire récursivement
-int remove_callback(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf) {
-    if (typeflag == FTW_D) {
-        return rmdir(fpath);  // Supprime les répertoires vides
-    }
-    return remove(fpath);  // Supprime les fichiers
-}
-
-void remove_directory(const char *path) {
-    nftw(path, remove_callback, 64, FTW_DEPTH | FTW_PHYS);
-}
+void create_backup(const char *source, const char *destination, const char *hashes, int v);
+void init_backup(const char *dir_backup, const char *source, int v);
+void restore_backup(const char *backup_id, const char *source, const char *dest, const char *hashes, int v);
 
 // Initialisation du backup
-void init_backup(const char *dir_backup, const char *source) {
-    char *last_folder = find_most_recent_folder(dir_backup);
+void init_backup(const char *dir_backup, const char *source, int v) {
+    if (v == 1) printf("[INFO] Initialisation du backup : source='%s', dir_backup='%s'\n", source, dir_backup);
 
+    // Vérifie si les chemins source et dir_backup sont valides
+    if (source == NULL || dir_backup == NULL) {
+        fprintf(stderr, "Erreur : source ou dir_backup est NULL.\n");
+        return;
+    }
+
+    // Obtient le dernier nom de répertoire du chemin source
+    const char *last_name = get_last_directory(source);
+    if (last_name == NULL || strlen(last_name) == 0) {
+        fprintf(stderr, "Erreur : nom de fichier source invalide.\n");
+        return;
+    }
+
+    char src_name[MAX_PATH];
+    // Crée un chemin pour le répertoire de sauvegarde
+    if (snprintf(src_name, MAX_PATH, "%s/%s", dir_backup, last_name) >= MAX_PATH) {
+        fprintf(stderr, "Erreur : chemin de backup trop long.\n");
+        return;
+    }
+
+    create_directory(src_name);
+    if (v == 1) printf("[INFO] Répertoire de base créé : %s\n", src_name);
+
+    // Recherche du dernier dossier créé
+    char *last_folder = find_most_recent_folder(src_name);
     char timestamped_backup_name[MAX_PATH];
+    // Obtient un nom de répertoire avec un timestamp
     get_current_time(timestamped_backup_name, sizeof(timestamped_backup_name));
 
     char new_backup_dir[MAX_PATH];
-    if (snprintf(new_backup_dir, MAX_PATH, "%s/%s", dir_backup, timestamped_backup_name) >= MAX_PATH) {
+    // Crée un nouveau chemin pour le répertoire de sauvegarde avec le timestamp
+    if (snprintf(new_backup_dir, MAX_PATH, "%s/%s", src_name, timestamped_backup_name) >= MAX_PATH) {
         fprintf(stderr, "Erreur : chemin de backup trop long.\n");
         return;
     }
     create_directory(new_backup_dir);
+    if (v == 1) printf("[INFO] Nouveau répertoire de backup créé : %s\n", new_backup_dir);
 
+    // Crée un fichier pour stocker les hashes des fichiers sauvegardés
     char hashes_file[MAX_PATH];
-    if (snprintf(hashes_file, MAX_PATH, "%s/hashes.dat", dir_backup) >= MAX_PATH) {
+    if (snprintf(hashes_file, MAX_PATH, "%s/hashes.dat", src_name) >= MAX_PATH) {
         fprintf(stderr, "Erreur : chemin du fichier hashes trop long.\n");
         return;
     }
@@ -137,43 +60,33 @@ void init_backup(const char *dir_backup, const char *source) {
         return;
     }
     fclose(hash_file);
+    if (v == 1) printf("[INFO] Fichier 'hashes.dat' créé : %s\n", hashes_file);
 
+    // Copie les fichiers du dernier dossier trouvé
     if (last_folder) {
         if (copy_with_cp(last_folder, new_backup_dir) == 0) {
-            printf("Copie réussie de '%s' vers '%s'.\n", last_folder, new_backup_dir);
+            if (v == 1) printf("[INFO] Copie réussie de '%s' vers '%s'.\n", last_folder, new_backup_dir);
         } else {
             fprintf(stderr, "Erreur lors de la copie depuis '%s'.\n", last_folder);
         }
     } else {
-        fprintf(stderr, "Aucun dossier précédent trouvé dans '%s'.\n", dir_backup);
+        fprintf(stderr, "Aucun dossier précédent trouvé dans '%s'.\n", src_name);
     }
 
-    create_backup(source, new_backup_dir, hashes_file);
-    printf("Backup initialisé avec succès dans le dossier : %s\n", new_backup_dir);
-}
-
-// Fonction pour vérifier si c'est un répertoire
-int is_directory(const char *path) {
-    struct stat statbuf;
-    return stat(path, &statbuf) == 0 && S_ISDIR(statbuf.st_mode);
-}
-
-// Fonction pour copier un fichier ou un répertoire
-int copy_item(const char *source, const char *destination) {
-    if (is_directory(source)) {
-        create_directory(destination);
-        return copy_with_cp(source, destination);
-    } else {
-        return copy_with_cp(source, destination);
-    }
+    // Crée un backup à partir du répertoire source vers le nouveau répertoire
+    create_backup(source, new_backup_dir, hashes_file, v);
 }
 
 // Fonction principale de backup
-void create_backup(const char *source, const char *destination, const char *hashes) {
+void create_backup(const char *source, const char *destination, const char *hashes, int v) {
+    if (v == 1) printf("[INFO] Création du backup : source='%s', destination='%s'\n", source, destination);
+
+    // Evite un backup si source et destination sont les mêmes
     if (strcmp(source, destination) == 0) {
-        return;  // Ne pas faire de backup si source et destination sont les mêmes
+        return;
     }
 
+    // Liste les fichiers présents dans le répertoire source et destination
     char **files_src = list_files(source);
     char **files_dest = list_files(destination);
 
@@ -185,43 +98,24 @@ void create_backup(const char *source, const char *destination, const char *hash
     int files_src_len = array_length(files_src);
     int files_dest_len = array_length(files_dest);
 
+    // Sauvegarde les fichiers source dans la destination
     for (int i = 0; i < files_src_len; i++) {
         char src_path[MAX_PATH], dest_path[MAX_PATH];
         snprintf(src_path, MAX_PATH, "%s/%s", source, files_src[i]);
         snprintf(dest_path, MAX_PATH, "%s/%s", destination, files_src[i]);
 
+        // Si c'est un répertoire, créer un répertoire dans la destination et y faire un backup
         if (is_directory(src_path)) {
-            printf("Skipping directory: %s\n", src_path);
+            create_directory(dest_path); 
+            if (v == 1) printf("[INFO] Création du répertoire : %s\n", dest_path);
+            create_backup(src_path, dest_path, hashes, v);
         } else {
-            deduplicate_files(src_path, dest_path, hashes);
+            // Si c'est un fichier, faire un backup et éviter les doublons
+            deduplicate_files(src_path, dest_path, hashes, v);
         }
     }
 
-    char **folders_src = list_folder(source);
-    char **folders_dest = list_folder(destination);
-
-    if (folders_src == NULL || folders_dest == NULL) {
-        fprintf(stderr, "Erreur lors de la récupération des répertoires.\n");
-        return;
-    }
-
-    int folders_src_len = array_length(folders_src);
-    int folders_dest_len = array_length(folders_dest);
-
-    for (int i = 0; i < folders_src_len; i++) {
-        char new_src[MAX_PATH], new_dest[MAX_PATH];
-        snprintf(new_src, MAX_PATH, "%s/%s", source, folders_src[i]);
-        snprintf(new_dest, MAX_PATH, "%s/%s", destination, folders_src[i]);
-
-        if (is_directory(new_src)) {
-            create_directory(new_dest);
-            create_backup(new_src, new_dest, hashes);
-        } else {
-            printf("Skipping non-directory: %s\n", new_src);
-        }
-    }
-
-    // Suppression des fichiers supplémentaires dans le répertoire destination
+    // Supprimer les fichiers/dossiers dans la destination qui ne sont pas présents dans la source
     for (int i = 0; i < files_dest_len; i++) {
         int found = 0;
         for (int j = 0; j < files_src_len; j++) {
@@ -234,33 +128,83 @@ void create_backup(const char *source, const char *destination, const char *hash
             char dest_path[MAX_PATH];
             snprintf(dest_path, MAX_PATH, "%s/%s", destination, files_dest[i]);
             remove_directory(dest_path);
+            if (v == 1) printf("[INFO] Suppression du fichier/répertoire : %s\n", dest_path);
         }
     }
 
-    // Suppression des répertoires supplémentaires dans destination
-    for (int i = 0; i < folders_dest_len; i++) {
-        int found = 0;
-        for (int j = 0; j < folders_src_len; j++) {
-            if (strcmp(folders_dest[i], folders_src[j]) == 0) {
-                found = 1;
-                break;
-            }
-        }
-        if (!found) {
-            char dest_path[MAX_PATH];
-            snprintf(dest_path, MAX_PATH, "%s/%s", destination, folders_dest[i]);
-            remove_directory(dest_path);
-        }
-    }
-
-    // Libération de la mémoire allouée
+    // Libération de la mémoire allouée pour les fichiers
     for (int i = 0; i < files_src_len; i++) free(files_src[i]);
     for (int i = 0; i < files_dest_len; i++) free(files_dest[i]);
-    for (int i = 0; i < folders_src_len; i++) free(folders_src[i]);
-    for (int i = 0; i < folders_dest_len; i++) free(folders_dest[i]);
 
     free(files_src);
     free(files_dest);
-    free(folders_src);
-    free(folders_dest);
+}
+
+// Fonction de restauration
+void restore_backup(const char *backup_id, const char *source, const char *dest, const char *hashes, int v) {
+    if (v == 1) printf("[INFO] Restauration du backup : backup_id='%s', source='%s', dest='%s'\n", backup_id, source, dest);
+
+    // Vérifie si les chemins source et destination sont valides
+    if (source == NULL || dest == NULL) {
+        fprintf(stderr, "Erreur : source, destination ou backup_id est NULL.\n");
+        return;
+    }
+
+    if (!is_directory(source)) {
+        fprintf(stderr, "Erreur : le répertoire de sauvegarde '%s' n'existe pas.\n", source);
+        return;
+    }
+
+    // Crée le répertoire de destination pour la restauration
+    create_directory(dest);
+    if (v == 1) printf("[INFO] Création du répertoire de destination : %s\n", dest);
+
+    // Utilisation d'un fichier hashes spécifique ou création de l'un nouveau pour la restauration
+    char hashes_name[MAX_PATH];
+    if (hashes == NULL) {
+        if (snprintf(hashes_name, MAX_PATH, "%s/hashes_restore.dat", source) >= MAX_PATH) {
+            fprintf(stderr, "Erreur : chemin du fichier 'hashes.dat' trop long.\n");
+            return;
+        }
+        hashes = hashes_name;
+    }
+
+    // Création du chemin complet vers le backup spécifié
+    char src_backup_path[MAX_PATH];
+    if (backup_id != NULL) {
+        if (snprintf(src_backup_path, MAX_PATH, "%s/%s", source, backup_id) >= MAX_PATH) {
+            fprintf(stderr, "Erreur : chemin de backup trop long.\n");
+            return;
+        }
+        source = src_backup_path;
+    }
+
+    // Liste les fichiers dans le répertoire de backup
+    char **files_backup = list_files(source);
+    if (files_backup == NULL) {
+        fprintf(stderr, "Erreur : impossible de lister les fichiers dans '%s'.\n", source);
+        return;
+    }
+
+    int files_backup_len = array_length(files_backup);
+    // Restaure les fichiers dans le répertoire de destination
+    for (int i = 0; i < files_backup_len; i++) {
+        char src_path[MAX_PATH], dest_path[MAX_PATH];
+        snprintf(src_path, MAX_PATH, "%s/%s", source, files_backup[i]);
+        snprintf(dest_path, MAX_PATH, "%s/%s", dest, files_backup[i]);
+
+        if (is_directory(src_path)) {
+            create_directory(dest_path);
+            if (v == 1) printf("[INFO] Restauration du répertoire : %s\n", src_path);
+            restore_backup(NULL, src_path, dest_path, hashes, v);
+        } else {
+            // Restauration du fichier en évitant les doublons
+            deduplicate_files(src_path, dest_path, hashes, v);
+            if (v == 1) printf("[INFO] Restauration du fichier : %s\n", src_path);
+        }
+    }
+
+    // Libération de la mémoire allouée pour les fichiers
+    for (int i = 0; i < files_backup_len; i++) free(files_backup[i]);
+    free(files_backup);
 }
