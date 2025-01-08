@@ -143,22 +143,6 @@ void remove_directory(const char *path) {
     nftw(path, remove_callback, 64, FTW_DEPTH | FTW_PHYS); // Utiliser nftw pour supprimer récursivement
 }
 
-// Fonction de gestion de l'option --dry-run (simulation)
-// `source` : chemin de la source
-// `destination` : chemin de la destination
-// `backup_id` : identifiant de la sauvegarde
-// `back_up` : indique s'il s'agit d'une sauvegarde ou d'une restauration
-void handle_dry_run(const char *source, const char *destination, const char *backup_id, int back_up) {
-    printf("Mode Dry-run activé. Aucune copie réelle n'est effectuée.\n");
-
-    // Afficher un message selon qu'il s'agit d'une sauvegarde ou d'une restauration
-    if (back_up) {
-        printf("Sauvegarde simulée de '%s' vers '%s'.\n", source, destination);
-    } else {
-        printf("Restauration simulée depuis '%s' vers '%s' de la version : %s.\n", source, destination, backup_id);
-    }
-}
-
 // Fonction pour lister les sauvegardes dans un répertoire local
 // `dir_backup` : chemin du répertoire des sauvegardes
 void list_backups(const char *dir_backup, int verbose, int i) {
@@ -182,3 +166,20 @@ void list_backups(const char *dir_backup, int verbose, int i) {
 
     // Logique pour lister les sauvegardes sur un serveur distant ici...
 }
+
+// Fonction de gestion de l'option --dry-run (simulation)
+// `source` : chemin de la source
+// `destination` : chemin de la destination
+// `backup_id` : identifiant de la sauvegarde
+// `back_up` : indique s'il s'agit d'une sauvegarde ou d'une restauration
+void handle_dry_run(const char *source, const char *destination, const char *backup_id, int back_up) {
+    printf("Mode Dry-run activé. Aucune copie réelle n'est effectuée.\n");
+
+    // Afficher un message selon qu'il s'agit d'une sauvegarde ou d'une restauration
+    if (back_up) {
+        printf("Sauvegarde simulée de '%s' vers '%s'.\n", source, destination);
+    } else {
+        printf("Restauration simulée depuis '%s' vers '%s' de la version : %s.\n", source, destination, backup_id);
+    }
+}
+
