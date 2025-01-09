@@ -1,9 +1,10 @@
 # Nom de l'exécutable
-EXEC = main
+EXEC = bin/main
 
-# Répertoire des sources et des objets
+# Répertoire des sources des objets et du binaire 
 SRC_DIR = src
 OBJ_DIR = obj
+BIN_DIR = bin
 
 # Compilateur et options de compilation
 CC = gcc
@@ -23,6 +24,10 @@ all: $(EXEC)
 $(OBJ_DIR):
 	mkdir -p $(OBJ_DIR)
 
+# Créer le répertoire bin s'il n'existe pas
+$(BIN_DIR):
+	mkdir -p $(BIN_DIR)
+ 
 # Lien de l'exécutable à partir des objets
 $(EXEC): $(OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS)

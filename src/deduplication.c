@@ -1,6 +1,19 @@
 #include "deduplication.h"
 #include <openssl/md5.h>
 
+
+void md5_hash_from_string (char *string, char *hash)
+{
+    int i;
+    char unsigned md5[MD5_DIGEST_LENGTH] = {0};
+
+    MD5((const unsigned char *)string, strlen(string), md5);
+
+    for (i=0; i < MD5_DIGEST_LENGTH; i++) {
+        sprintf(hash + 2*i, "%02x", md5[i]);
+    }
+}
+
 // Fonction pour lire les deux fichiers et effectuer la déduplication
 // `source` : fichier source à traiter
 // `destination` : fichier de destination pour les chunks uniques
@@ -10,8 +23,8 @@
 void deduplicate_files(const char *source, const char *destination, const char *old_hashes, const char *new_hashes, int verbosity) {
     FILE *srcFile, *destFile, *newHashFile, *oldHashFile;
     unsigned char buffer[CHUNK_SIZE];
-    unsigned char currentHash[HASH_SIZE];
-    unsigned char hashBuffer[HASH_SIZE];
+    unsigned char currentHash[2*HASH_SIZE+1];
+    unsigned char hashBuffer[2*HASH_SIZE+1];
     size_t bytesRead;
     int isDuplicate;
     long chunkPosition = 0;  // Compteur pour déterminer la position à chaque chunk
@@ -56,20 +69,19 @@ void deduplicate_files(const char *source, const char *destination, const char *
         perror("Erreur lors de l'ouverture du fichier de destination");
         fclose(srcFile);
         fclose(oldHashFile);
-        if (new_hashes != NULL) fclose(newHashFile);
+        fclose(newHashFile);
         return;
     }
 
     // Lire le fichier source par chunks
     while ((bytesRead = fread(buffer, 1, CHUNK_SIZE, srcFile)) > 0) {
         // Calculer le hash MD5 du chunk
-        MD5(buffer, bytesRead, currentHash);
-
+        md5_hash_from_string(buffer, currentHash);
         // Vérifier si ce hash existe déjà dans le fichier des anciens hashes
         fseek(oldHashFile, 0, SEEK_SET);
         isDuplicate = 0;
-        while (fread(hashBuffer, 1, HASH_SIZE, oldHashFile) == HASH_SIZE) {
-            if (memcmp(hashBuffer, currentHash, HASH_SIZE) == 0) {
+        while (fread(hashBuffer, 1, 2*HASH_SIZE+1, oldHashFile) == 2*HASH_SIZE+1) {
+            if (memcmp(hashBuffer, currentHash, 2*HASH_SIZE+1) == 0) {
                 isDuplicate = 1;  // Le chunk est un doublon
                 if (verbosity == 1) {
                     printf("[INFO] Chunk détecté comme doublon (trouvé dans les anciens hashes).\n");
@@ -82,23 +94,21 @@ void deduplicate_files(const char *source, const char *destination, const char *
         if (!isDuplicate) {
             // Déplacer le curseur à la position du chunk actuel dans le fichier destination
             fseek(destFile, chunkPosition, SEEK_SET);
-
             // Remplacer ou écrire le chunk à la position calculée
             fwrite(buffer, 1, bytesRead, destFile);
             if (verbosity == 1) {
                 printf("[INFO] Chunk écrit/remplacé à la position %ld dans le fichier de destination.\n", chunkPosition);
             }
 
-            // Sauvegarder le hash dans le fichier des nouveaux hashes
-            if (new_hashes != NULL) {
-                fwrite(currentHash, 1, HASH_SIZE, newHashFile);
-            }
         } else {
             if (verbosity == 1) {
                 printf("[INFO] Chunk ignoré car il existe déjà dans l'historique.\n");
             }
         }
-
+        // Sauvegarder le hash dans le fichier des nouveaux hashes
+        if (new_hashes != NULL) {
+            fwrite(currentHash, 1, 2*HASH_SIZE+1, newHashFile);
+        }
         // Incrémenter la position pour le prochain chunk
         chunkPosition += bytesRead;
     }
@@ -112,7 +122,7 @@ void deduplicate_files(const char *source, const char *destination, const char *
     fclose(srcFile);
     fclose(oldHashFile);
     fclose(destFile);
-    if (new_hashes != NULL) fclose(newHashFile);
+    fclose(newHashFile);
 }
 
 // Fonction pour restaurer un fichier à partir des chunks sauvegardés
@@ -120,22 +130,36 @@ void deduplicate_files(const char *source, const char *destination, const char *
 // `dedup_file` : chemin du fichier contenant les chunks sauvegardés
 // `hashes` : chemin du fichier contenant les hashes de l'historique
 void restore_file(const char *file_to_restore, const char *dedup_file, const char *hashes, int v) {
-    FILE *restoreFile, *dedupFile, *hashFile;
-    unsigned char buffer[CHUNK_SIZE];
-    unsigned char buffer2[CHUNK_SIZE];
-    unsigned char hashBuffer[HASH_SIZE];
-    unsigned char dedupHash[HASH_SIZE];
-    unsigned char restoreHash[HASH_SIZE];
+    FILE *restoreFile, *dedupFile, *hashFile, *test;
+    unsigned char buffer[CHUNK_SIZE] = "";
+    unsigned char buffer2[CHUNK_SIZE] = "";
+    unsigned char hashBuffer[2*HASH_SIZE+1] = "";
+    unsigned char dedupHash[2*HASH_SIZE+1] = "";
+    unsigned char restoreHash[2*HASH_SIZE+1] ="";
+    long chunkPosition = 0;  // Compteur pour déterminer la position à chaque chunk
     size_t bytesRead;
+    size_t bytesRead2;
     int isDuplicate;
 
     // Afficher un message d'information si le niveau de verbosité est 1
     if (v == 1) printf("[INFO] Début de la restauration : file_to_restore='%s', dedup_file='%s', hashes='%s'\n", file_to_restore, dedup_file, hashes);
-
+    
+    
+    // Créer le fichier de restoration s'il n'existe pas
+    restoreFile = fopen(file_to_restore, "a");
+    fclose(restoreFile);
     // Ouvrir le fichier de restauration en mode lecture/écriture binaire
-    restoreFile = fopen(file_to_restore, "rb");
+    restoreFile = fopen(file_to_restore, "r+b");
     if (restoreFile == NULL) {
         perror("Erreur lors de l'ouverture du fichier à restaurer");
+        return;
+    }
+    // Ouvrir le fichier de restauration en mode lecture/écriture binaire
+    test = fopen(file_to_restore, "r+b");
+    if (test == NULL) {
+        perror("Erreur lors de l'ouverture du fichier à restaurer");
+        fclose(restoreFile);
+
         return;
     }
 
@@ -144,6 +168,8 @@ void restore_file(const char *file_to_restore, const char *dedup_file, const cha
     if (dedupFile == NULL) {
         perror("Erreur lors de l'ouverture du fichier des chunks dédupliqués");
         fclose(restoreFile);
+        fclose(test);
+
         return;
     }
 
@@ -153,61 +179,57 @@ void restore_file(const char *file_to_restore, const char *dedup_file, const cha
         perror("Erreur lors de l'ouverture du fichier des hashes");
         fclose(restoreFile);
         fclose(dedupFile);
+        fclose(test);
         return;
     }
 
     // Parcourir le fichier à restaurer chunk par chunk
     while ((bytesRead = fread(buffer, 1, CHUNK_SIZE, restoreFile)) > 0) {
+        
         // Calculer le hash MD5 du chunk courant du fichier à restaurer
-        MD5(buffer, bytesRead, restoreHash);
-
+        md5_hash_from_string(buffer, restoreHash);
         // Vérifier si ce hash existe déjà dans le fichier des hashes
         fseek(hashFile, 0, SEEK_SET);
         isDuplicate = 0;
-        while (fread(hashBuffer, 1, HASH_SIZE, hashFile) == HASH_SIZE) {
-            if (memcmp(hashBuffer, restoreHash, HASH_SIZE) == 0) {
+        while (fread(hashBuffer, 1, 2*HASH_SIZE+1, hashFile) == 2*HASH_SIZE+1) {
+            
+            if (memcmp(hashBuffer, restoreHash, 2*HASH_SIZE+1) == 0) {
                 isDuplicate = 1; // Le chunk est déjà dans les hashes
-                printf("[INFO] Chunk déjà présent dans l'historique, ignoré.\n");
+                if (v == 1) printf("[INFO] Chunk déjà présent dans l'historique, ignoré.\n");
                 break;
             }
         }
-
+        
         // Si le chunk n'est pas un doublon, rechercher le chunk dans le fichier dédupliqué
         if (!isDuplicate) {
             fseek(dedupFile, 0, SEEK_SET);
             int found = 0;
-
-            while ((bytesRead = fread(buffer2, 1, CHUNK_SIZE, dedupFile)) > 0) {
-                MD5(buffer2, bytesRead, dedupHash);
-
-                if (memcmp(hashBuffer, dedupHash, HASH_SIZE) == 0) {
-                    found = 1;
-                    printf("[INFO] Chunk trouvé dans le fichier dédupliqué, ajout au fichier restauré.\n");
-                    // Écrire le chunk dans le fichier restauré
-
-                    // Ouvrir le fichier de restauration en mode écriture binaire
-                    fclose(restoreFile);
-                    restoreFile = fopen(file_to_restore, "wb");
-                    if (restoreFile == NULL) {
-                        perror("Erreur lors de l'ouverture du fichier à restaurer");
-                        return;
+            while ((bytesRead2 = fread(buffer2, 1, CHUNK_SIZE, dedupFile)) > 0) {
+                md5_hash_from_string(buffer2, dedupHash);
+                fseek(hashFile, 0, SEEK_SET);//On reset le pointeur de lecture 
+                while (fread(hashBuffer, 1, 2*HASH_SIZE+1, hashFile) == 2*HASH_SIZE+1) {
+                    if (memcmp(hashBuffer, dedupHash, 2*HASH_SIZE+1) == 0) {
+                        found = 1;
+                        if (v == 1) printf("[INFO] Chunk trouvé dans le fichier dédupliqué, ajout au fichier restauré.\n");
+                        
+                        // Écrire le chunk dans le fichier restauré
+                        // Ouvrir le fichier de restauration en mode écriture binaire
+                        printf("position : %ld\n", chunkPosition);
+                        printf("%s\n", buffer2);
+                        fseek(test, chunkPosition, SEEK_END);
+                        fwrite(buffer2, 1, bytesRead2, test);
+                        break;
                     }
-                    fseek(restoreFile, 0, SEEK_END);
-                    fwrite(buffer2, 1, bytesRead, restoreFile);
-                    fclose(restoreFile);
-                    restoreFile = fopen(file_to_restore, "r+b");
-                    if (restoreFile == NULL) {
-                        perror("Erreur lors de l'ouverture du fichier à restaurer");
-                        return;
-                    }
-                    break;
                 }
             }
 
             if (!found) {
                 fprintf(stderr, "[ERREUR] Chunk correspondant non trouvé dans le fichier dédupliqué pour le hash calculé.\n");
             }
+
+            
         }
+        chunkPosition += bytesRead;
     }
 
     // Afficher un message de fin si le niveau de verbosité est 1
@@ -217,4 +239,5 @@ void restore_file(const char *file_to_restore, const char *dedup_file, const cha
     fclose(restoreFile);
     fclose(dedupFile);
     fclose(hashFile);
+    fclose(test);
 }
